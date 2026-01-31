@@ -16,9 +16,9 @@ git clone https://github.com/Quadsam/dmenu-statusbar.git
 
 - Build the package:
 
-  ``` bash
-  make
-  ```
+``` bash
+make
+```
 
 **TODO: Re-implement**
 
