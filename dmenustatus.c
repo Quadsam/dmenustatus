@@ -161,11 +161,11 @@ int main(void)
 
 		// Concatenate the CPU temp to the buffer (00°C)
 		if (enable_temp)
-			get_temp(buffer, BUFFER_SIZE)
+			get_temp(buffer, BUFFER_SIZE);
 
 		// Concatenate the battery level to the buffer (00°C)
 		if (enable_batt)
-			get_batt(buffer, BUFFER_SIZE)
+			get_batt(buffer, BUFFER_SIZE);
 
 		// Write buffer to X display
 		XStoreName(display, DefaultRootWindow(display), buffer);
