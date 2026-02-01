@@ -1,7 +1,7 @@
 CC       := gcc
 CPPFLAGS +=
 CFLAGS   += -Wall -Werror -ggdb -O0
-LDFLAGS  += `pkg-config --libs x11`
+LDFLAGS  += `pkg-config --libs x11 fontconfig`
 PROGRAM   = dmenustatus
 
 .PHONY: all clean cleanall test

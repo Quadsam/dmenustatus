@@ -27,6 +27,36 @@
 
 Display *display;
 
+#include <fontconfig/fontconfig.h>
+
+bool use_nerd = false;
+
+static bool has_nerd_font() {
+    bool found = false;
+    FcConfig* config = FcInitLoadConfigAndFonts();
+    
+    // We create a "pattern" to search for Nerd Fonts
+    FcPattern* pat = FcPatternCreate();
+    FcObjectSet* os = FcObjectSetBuild(FC_FAMILY, NULL);
+    FcFontSet* fs = FcFontList(config, pat, os);
+
+    for (int i = 0; fs && i < fs->nfont; i++) {
+        FcChar8* family;
+        if (FcPatternGetString(fs->fonts[i], FC_FAMILY, 0, &family) == FcResultMatch) {
+            if (strstr((char*)family, "Nerd Font")) {
+                found = true;
+                break;
+            }
+        }
+    }
+
+    // Clean up
+    FcFontSetDestroy(fs);
+    FcObjectSetDestroy(os);
+    FcPatternDestroy(pat);
+    return found;
+}
+
 static
 bool get_datetime(char *buff, size_t buff_size)
 {
@@ -42,6 +72,7 @@ bool get_datetime(char *buff, size_t buff_size)
 
 	return true;
 }
+
 
 static
 bool get_temp(char *buff, size_t buff_size)
@@ -89,23 +120,33 @@ bool get_batt(char *buff, size_t buff_size)
 
 	fclose(file);
 
-	char status = '?'; // Set status to a question mark by default (not changed unless recognized)
+	char *status = "󰂃"; // Set status to a question mark by default (not changed unless recognized)
 	file = fopen("/sys/class/power_supply/BAT0/status", "r");
 	if (file) {
-		if (fgets(data, sizeof(data), file))
-			switch (data[0]) {
-				case 'D': status = 'v'; break; // D(ischarging)
-				case 'N': status = '-'; break; // N(ot charging)
-				case 'F': status = ' '; break; // F(ull)
-				case 'C': status = '^'; break; // C(harging)
+		if (fgets(data, sizeof(data), file)) {
+			if (use_nerd) {
+				switch (data[0]) {
+					case 'D': status = "󰂍"; break; // D(ischarging)
+					case 'N': status = "󰂄"; break; // N(ot charging)
+					case 'F': status = "󰂄"; break; // F(ull)
+					case 'C': status = "󰂐"; break; // C(harging)
+				}
+			} else {
+				switch (data[0]) {
+					case 'D': status = "v"; break; // D(ischarging)
+					case 'N': status = "-"; break; // N(ot charging)
+					case 'F': status = " "; break; // F(ull)
+					case 'C': status = "^"; break; // C(harging)
+				}
 			}
+		}
 		fclose(file);
 	}
 
 	if (buff != NULL && buff_size > 0) {
 		size_t len = strlen(buff);
 		if (len < buff_size)
-			snprintf(buff + len, buff_size - len, "| %d%%%c ", level, status);
+			snprintf(buff + len, buff_size - len, "| %d%%%s ", level, status);
 	}
 
 	return true;
@@ -119,6 +160,8 @@ int main(void)
 		printf("Error: Cannot open display.\n");
 		exit(EXIT_FAILURE);
 	}
+
+	use_nerd = has_nerd_font();
 
 	// Allocate and zero our buffer
 	char *buffer = malloc(BUFFER_SIZE);
