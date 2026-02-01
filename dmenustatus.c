@@ -23,7 +23,7 @@
 #include <sys/stat.h>
 #include <X11/Xlib.h>
 
-#define BUFFER_SIZE 128 * sizeof(char)
+#define BUFFER_SIZE 128
 
 Display *display;
 
@@ -63,11 +63,8 @@ bool get_temp(char *buff, size_t buff_size)
 		size_t len = strlen(buff);
 
 		// Make sure there is space here
-		if (len + 1 < buff_size) {
-			char formatted[32];
-			snprintf(formatted, sizeof(formatted), "| %02.0f°C ", temp);
-			strncat(buff, formatted, buff_size - len - 1);
-		}
+		if (len + 1 < buff_size)
+			snprintf(buff + len, buff_size - len, "| %02.0f°C ", temp);
 	}
 
 	return true;
@@ -107,9 +104,8 @@ bool get_batt(char *buff, size_t buff_size)
 
 	if (buff != NULL && buff_size > 0) {
 		size_t len = strlen(buff);
-		if (len < buff_size) {
+		if (len < buff_size)
 			snprintf(buff + len, buff_size - len, "| %d%%%c ", level, status);
-		}
 	}
 
 	return true;
