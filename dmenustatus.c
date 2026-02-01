@@ -50,7 +50,7 @@ bool get_temp(char *buff)
 	const char *path = "/sys/devices/virtual/thermal/thermal_zone0/temp";
 	FILE *file = fopen(path, "r");
 	if (file == NULL)
-		return false; // File doesnt exists
+		return false; // File doesnt exist
 
 	char data[16];
 	fgets(data, 16, file);
