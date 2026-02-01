@@ -28,18 +28,17 @@
 Display *display;
 
 static
-bool get_datetime(char *buff)
+bool get_datetime(char *buff, size_t buff_size)
 {
-	size_t success;
-	time_t now = time(NULL);			// Get current time
-	struct tm *t = localtime(&now);		// Convert to local time structure
-	char formatted[64];
-
-	success = strftime(formatted, sizeof(formatted), " %I:%M:%S %p | %m/%d/%Y ", t);
-	if (success == 0)
+	if (buff == NULL || buff_size == 0)
 		return false;
 
-	buff = strcpy(buff, formatted);
+	time_t now = time(NULL);			// Get current time
+	struct tm *t = localtime(&now);		// Convert to local time structure
+	if (t == NULL)
+		return false;
+
+	strftime(buff, buff_size, " %I:%M:%S %p | %m/%d/%Y ", t);
 
 	return true;
 }
@@ -152,31 +151,27 @@ int main(void)
 	bool enable_temp = get_temp(NULL, 0);
 	bool enable_batt = get_batt(NULL);
 	while (running) {
-		memset(buffer, '\0', BUFFER_SIZE);
+		buffer[0] = '\0'; // Clear our buffer
 
 		// Begins the buffer with the current time and date (HH:MM:SS %p | MM/DD/YYYY)
-		if (!get_datetime(buffer)) {
-			printf("Error: Unable to get current date and time, something is wrong.\n");
-			free(buffer);
-			exit(EXIT_FAILURE);
+		if (!get_datetime(buffer, BUFFER_SIZE)) {
+			fprintf(stderr, "Error: Unable to get current date and time, something is wrong.\n");
+			break;
 		}
 
 		// Concatenate the CPU temp to the buffer (00°C)
 		if (enable_temp)
-			if (!get_temp(buffer, BUFFER_SIZE))
-				printf("Info: Unable to get current temp.\n");
+			get_temp(buffer, BUFFER_SIZE)
 
 		// Concatenate the battery level to the buffer (00°C)
 		if (enable_batt)
-			if (!get_batt(buffer))
-				printf("Info: Unable to get battery level.\n");
+			get_batt(buffer, BUFFER_SIZE)
 
 		// Write buffer to X display
 		XStoreName(display, DefaultRootWindow(display), buffer);
 		XSync(display, False);
 
 		printf("'%s'\n", buffer);
-
 		sleep(1);
 	}
 
