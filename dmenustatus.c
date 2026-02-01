@@ -20,6 +20,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <X11/Xlib.h>
 
 #define BUFFER_SIZE 128 * sizeof(char)
@@ -75,16 +76,61 @@ bool get_temp(char *buff)
 static
 bool get_batt(char *buff)
 {
-	bool have_battery = true; // Use test to define
+	char *present = "/sys/class/power_supply/BAT0/present";
+	struct stat s;
+	if ((stat(present, &s)) == -1)
+		return false; // No battery installed
 
-	if (!have_battery)
+	char *cap = "/sys/class/power_supply/BAT0/capacity";
+	FILE *file = fopen(cap, "r");
+	if (file == NULL)
 		return false;
 
-	// Get batt logic
+	char *data = malloc(513);
+	if (fgets(data, 512, file) == NULL) {
+		printf("No battery installed\n");
+		free(data);
+		fclose(file);
+		return false; // Unable to read capacity
+	}
 
-	char *formatted_batt = "| 100%- ";
+	int level;
+	fclose(file);
+	sscanf(data, "%d", &level);
+	memset(data, '\0', 513);
+
+	char status[8];
+	char *stat = "/sys/class/power_supply/BAT0/status";
+	strcpy(status, "?"); // Set status to a question mark by default (not changed unless recognized)
+	if ((file = fopen(stat, "r")) != NULL) {
+		if (fgets(data, 512, file) != NULL)
+			switch (data[0])
+			{
+			case 'D': // D(ischarging)
+				strcpy(status, "v");
+				break;
+			case 'N': // N(ot charging)
+				strcpy(status, "-");
+				break;
+			case 'F': // F(ull)
+				strcpy(status, " ");
+				break;
+			case 'C': // C(harging)
+				strcpy(status, "^");
+				break;
+			default:
+				printf("Status: '%d'\n", data[0]);
+				break;
+			}
+		fclose(file);
+	}
+	free(data);
+
+	char formatted[64];
+	sprintf(formatted, "| %d%%%s ", level, status);
+
 	if (buff != NULL)
-		buff = strcat(buff, formatted_batt);
+		buff = strcat(buff, formatted);
 
 	return true;
 }
