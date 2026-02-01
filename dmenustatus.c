@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#include <fontconfig/fontconfig.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
+#include <signal.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/stat.h>
-#include <signal.h>
 #include <X11/Xlib.h>
 
 #define VERSION "0.9.3-alpha"
@@ -29,8 +30,7 @@
 
 Display *display;
 
-#include <fontconfig/fontconfig.h>
-
+bool running = true;
 bool use_nerd = false;
 
 static bool has_nerd_font() {
@@ -153,8 +153,6 @@ bool get_batt(char *buff, size_t buff_size)
 
 	return true;
 }
-
-bool running = true;
 
 static
 void cleanup(int sig) {
