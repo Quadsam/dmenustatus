@@ -163,6 +163,23 @@ void cleanup(int sig) {
 	return;
 }
 
+
+/*
+	TODO: Rewrite logging system
+	TODO: - Fatal
+	TODO: - Error
+	TODO: - Warning
+	TODO: - Info
+	TODO: - Debug
+	TODO: Rewrite argument parsing
+	TODO: -v increase verbosity
+	TODO: -t <n> test mode (run loop n times and stop)
+	TODO: -d daemonize and run in the background (requires next TODO)
+	TODO: Rewrite daemonizing
+	TODO: setsid()
+	TODO: execvp()
+*/
+
 int main(void)
 {
 
