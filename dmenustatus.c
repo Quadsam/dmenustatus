@@ -21,6 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <signal.h>
 #include <X11/Xlib.h>
 
 #define BUFFER_SIZE 128
@@ -152,21 +153,35 @@ bool get_batt(char *buff, size_t buff_size)
 	return true;
 }
 
+bool running = true;
+
+static
+void cleanup(int sig) {
+	running = false;
+	printf("Caught signal %d\n", sig);
+	return;
+}
+
 int main(void)
 {
+
+	// Cleanup on these signals
+	signal(SIGHUP, cleanup);
+	signal(SIGINT, cleanup);
+	signal(SIGQUIT, cleanup);
+	signal(SIGTERM, cleanup);
+
 	// Open the X display
 	if (!(display = XOpenDisplay(NULL)))
 	{
 		printf("Error: Cannot open display.\n");
 		exit(EXIT_FAILURE);
 	}
-
 	use_nerd = has_nerd_font();
 
 	// Allocate and zero our buffer
 	char *buffer = malloc(BUFFER_SIZE);
 
-	bool running = true;
 	bool enable_temp = get_temp(NULL, 0);
 	bool enable_batt = get_batt(NULL, 0);
 	while (running) {
