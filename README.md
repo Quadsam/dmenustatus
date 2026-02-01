@@ -20,8 +20,6 @@ git clone https://github.com/Quadsam/dmenu-statusbar.git
 make
 ```
 
-**TODO: Re-implement**
-
 - Install the package:
 
 ``` bash
