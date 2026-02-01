@@ -30,8 +30,11 @@
 
 Display *display;
 
+int verbose = 0;
+int test_count = 0;
 bool running = true;
 bool use_nerd = false;
+bool daemonize = false;
 
 static bool has_nerd_font() {
     bool found = false;
@@ -41,6 +44,9 @@ static bool has_nerd_font() {
     FcPattern* pat = FcPatternCreate();
     FcObjectSet* os = FcObjectSetBuild(FC_FAMILY, NULL);
     FcFontSet* fs = FcFontList(config, pat, os);
+    FcConfigDestroy(config);
+    FcPatternDestroy(pat);
+    FcObjectSetDestroy(os);
 
     for (int i = 0; fs && i < fs->nfont; i++) {
         FcChar8* family;
@@ -52,10 +58,7 @@ static bool has_nerd_font() {
         }
     }
 
-    // Clean up
     FcFontSetDestroy(fs);
-    FcObjectSetDestroy(os);
-    FcPatternDestroy(pat);
     return found;
 }
 
@@ -155,6 +158,54 @@ bool get_batt(char *buff, size_t buff_size)
 }
 
 static
+void parse_args(int argc, char **argv)
+{
+	int c;
+	while ((c = getopt(argc, argv, ":dhqt:vV")) != -1)
+		switch (c)
+		{
+		case 'd':
+			daemonize = true;
+			break;
+		case 'h':
+			printf("Usage %s [OPTION]\n\n", argv[0]);
+			printf("Options:\n");
+			printf("  -d,      Run as a daemon.\n");
+			printf("  -h,      Display this help.\n");
+			printf("  -q,      Decrease verbosity.\n");
+			printf("  -t <n>,  Run main loop 'n' times.\n");
+			printf("  -v,      Increase the verbosity.\n");
+			printf("  -V,      Display program version.\n");
+			exit(EXIT_SUCCESS);
+			break;
+		case 'q':
+			if (verbose != 0) verbose--;
+			break;
+		case 't':
+			test_count = atoi(optarg);
+			if (test_count <= 0) test_count = 1;
+			break;
+		case 'v':
+			verbose++;
+			printf("Increasing verbosity\n");
+			break;
+		case 'V':
+			printf("%s v%s\n", argv[0], VERSION);
+			exit(EXIT_SUCCESS);
+			break;
+		case '?':
+			printf("Illegal option -- '-%c'\n", optopt);
+			exit(EXIT_FAILURE);
+			break;
+		case ':':
+			printf("Missing argument for -- '-%c'\n", optopt);
+			exit(EXIT_FAILURE);
+			break;
+		}
+	return;
+}
+
+static
 void cleanup(int sig) {
 	running = false;
 	printf("Caught signal %d\n", sig);
@@ -169,23 +220,20 @@ void cleanup(int sig) {
 	TODO: - Warning
 	TODO: - Info
 	TODO: - Debug
-	TODO: Rewrite argument parsing
-	TODO: -v increase verbosity
-	TODO: -t <n> test mode (run loop n times and stop)
-	TODO: -d daemonize and run in the background (requires next TODO)
 	TODO: Rewrite daemonizing
-	TODO: setsid()
-	TODO: execvp()
+	TODO: - setsid()
+	TODO: - execvp()
 */
 
-int main(void)
+int main(int argc, char **argv)
 {
-
 	// Cleanup on these signals
 	signal(SIGHUP, cleanup);
 	signal(SIGINT, cleanup);
 	signal(SIGQUIT, cleanup);
 	signal(SIGTERM, cleanup);
+
+	parse_args(argc, argv);
 
 	// Open the X display
 	if (!(display = XOpenDisplay(NULL)))
@@ -197,6 +245,7 @@ int main(void)
 
 	// Allocate and zero our buffer
 	char *buffer = malloc(BUFFER_SIZE);
+	if (!buffer) return 1;
 
 	bool enable_temp = get_temp(NULL, 0);
 	bool enable_batt = get_batt(NULL, 0);
@@ -210,19 +259,24 @@ int main(void)
 		}
 
 		// Concatenate the CPU temp to the buffer (00°C)
-		if (enable_temp)
-			get_temp(buffer, BUFFER_SIZE);
+		if (enable_temp) get_temp(buffer, BUFFER_SIZE);
 
 		// Concatenate the battery level to the buffer (00°C)
-		if (enable_batt)
-			get_batt(buffer, BUFFER_SIZE);
+		if (enable_batt) get_batt(buffer, BUFFER_SIZE);
 
 		// Write buffer to X display
 		XStoreName(display, DefaultRootWindow(display), buffer);
 		XSync(display, False);
 
-		printf("'%s'\n", buffer);
-		sleep(1);
+		if (verbose > 0) printf("'%s'\n", buffer);
+
+		if (test_count > 0) {
+			test_count--;
+			if (test_count == 0)
+				running = false;
+		}
+
+		if (running) sleep(1);
 	}
 
 	free(buffer);
