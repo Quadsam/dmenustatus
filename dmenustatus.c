@@ -45,23 +45,31 @@ bool get_datetime(char *buff)
 }
 
 static
-bool get_temp(char *buff)
+bool get_temp(char *buff, size_t buff_size)
 {
-	const char *path = "/sys/devices/virtual/thermal/thermal_zone0/temp";
-	FILE *file = fopen(path, "r");
+	FILE *file = fopen("/sys/devices/virtual/thermal/thermal_zone0/temp", "r");
 	if (file == NULL)
 		return false; // File doesnt exist
 
 	char data[16];
-	fgets(data, 16, file);
+	if (fgets(data, sizeof(data), file) == NULL) {
+		fclose(file);
+		return false; // File has no data
+	}
 	fclose(file);
 
-	float temp = atof(data) / 1000;
-	char formatted[64];
-	sprintf(formatted, "| %02.0f°C ", temp);
+	float temp = atof(data) / 1000.0f;
 
-	if (buff != NULL)
-		buff = strcat(buff, formatted);
+	if (buff != NULL && buff_size > 0) {
+		size_t len = strlen(buff);
+
+		// Make sure there is space here
+		if (len + 1 < buff_size) {
+			char formatted[32];
+			snprintf(formatted, sizeof(formatted), "| %02.0f°C ", temp);
+			strncat(buff, formatted, buff_size - len - 1);
+		}
+	}
 
 	return true;
 }
@@ -141,7 +149,7 @@ int main(void)
 	char *buffer = malloc(BUFFER_SIZE);
 
 	bool running = true;
-	bool enable_temp = get_temp(NULL);
+	bool enable_temp = get_temp(NULL, 0);
 	bool enable_batt = get_batt(NULL);
 	while (running) {
 		memset(buffer, '\0', BUFFER_SIZE);
@@ -155,7 +163,7 @@ int main(void)
 
 		// Concatenate the CPU temp to the buffer (00°C)
 		if (enable_temp)
-			if (!get_temp(buffer))
+			if (!get_temp(buffer, BUFFER_SIZE))
 				printf("Info: Unable to get current temp.\n");
 
 		// Concatenate the battery level to the buffer (00°C)
