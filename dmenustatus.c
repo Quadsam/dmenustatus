@@ -30,12 +30,12 @@ Display *display;
 static
 bool get_datetime(char *buff, size_t buff_size)
 {
-	if (buff == NULL || buff_size == 0)
+	if (!buff || buff_size == 0)
 		return false;
 
 	time_t now = time(NULL);			// Get current time
 	struct tm *t = localtime(&now);		// Convert to local time structure
-	if (t == NULL)
+	if (!t)
 		return false;
 
 	strftime(buff, buff_size, " %I:%M:%S %p | %m/%d/%Y ", t);
@@ -47,7 +47,7 @@ static
 bool get_temp(char *buff, size_t buff_size)
 {
 	FILE *file = fopen("/sys/devices/virtual/thermal/thermal_zone0/temp", "r");
-	if (file == NULL)
+	if (!file)
 		return false; // File doesnt exist
 
 	char data[16];
@@ -74,63 +74,43 @@ bool get_temp(char *buff, size_t buff_size)
 }
 
 static
-bool get_batt(char *buff)
+bool get_batt(char *buff, size_t buff_size)
 {
-	char *present = "/sys/class/power_supply/BAT0/present";
 	struct stat s;
-	if ((stat(present, &s)) == -1)
+	if (stat("/sys/class/power_supply/BAT0/present", &s) == -1)
 		return false; // No battery installed
 
-	char *cap = "/sys/class/power_supply/BAT0/capacity";
-	FILE *file = fopen(cap, "r");
-	if (file == NULL)
+
+	FILE *file = fopen("/sys/class/power_supply/BAT0/capacity", "r");
+	if (!file)
 		return false;
 
-	char *data = malloc(513);
-	if (fgets(data, 512, file) == NULL) {
-		printf("No battery installed\n");
-		free(data);
-		fclose(file);
-		return false; // Unable to read capacity
-	}
+	char data[16];
+	int level = 0;
+	if (fgets(data, sizeof(data), file))
+		level = atoi(data);
 
-	int level;
 	fclose(file);
-	sscanf(data, "%d", &level);
-	memset(data, '\0', 513);
 
-	char status[8];
-	char *stat = "/sys/class/power_supply/BAT0/status";
-	strcpy(status, "?"); // Set status to a question mark by default (not changed unless recognized)
-	if ((file = fopen(stat, "r")) != NULL) {
-		if (fgets(data, 512, file) != NULL)
-			switch (data[0])
-			{
-			case 'D': // D(ischarging)
-				strcpy(status, "v");
-				break;
-			case 'N': // N(ot charging)
-				strcpy(status, "-");
-				break;
-			case 'F': // F(ull)
-				strcpy(status, " ");
-				break;
-			case 'C': // C(harging)
-				strcpy(status, "^");
-				break;
-			default:
-				printf("Status: '%d'\n", data[0]);
-				break;
+	char status = '?'; // Set status to a question mark by default (not changed unless recognized)
+	file = fopen("/sys/class/power_supply/BAT0/status", "r");
+	if (file) {
+		if (fgets(data, sizeof(data), file))
+			switch (data[0]) {
+				case 'D': status = 'v'; break; // D(ischarging)
+				case 'N': status = '-'; break; // N(ot charging)
+				case 'F': status = ' '; break; // F(ull)
+				case 'C': status = '^'; break; // C(harging)
 			}
 		fclose(file);
 	}
-	free(data);
 
-	char formatted[64];
-	sprintf(formatted, "| %d%%%s ", level, status);
-
-	if (buff != NULL)
-		buff = strcat(buff, formatted);
+	if (buff != NULL && buff_size > 0) {
+		size_t len = strlen(buff);
+		if (len < buff_size) {
+			snprintf(buff + len, buff_size - len, "| %d%%%c ", level, status);
+		}
+	}
 
 	return true;
 }
@@ -149,7 +129,7 @@ int main(void)
 
 	bool running = true;
 	bool enable_temp = get_temp(NULL, 0);
-	bool enable_batt = get_batt(NULL);
+	bool enable_batt = get_batt(NULL, 0);
 	while (running) {
 		buffer[0] = '\0'; // Clear our buffer
 
