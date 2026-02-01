@@ -48,16 +48,12 @@ static
 bool get_temp(char *buff)
 {
 	const char *path = "/sys/devices/virtual/thermal/thermal_zone0/temp";
-
 	FILE *file = fopen(path, "r");
 	if (file == NULL)
 		return false; // File doesnt exists
 
 	char data[16];
-	if (fgets(data, 16, file) == NULL) {
-		fclose(file);
-		return false; // File contains no data
-	}
+	fgets(data, 16, file);
 	fclose(file);
 
 	float temp = atof(data) / 1000;
@@ -66,7 +62,6 @@ bool get_temp(char *buff)
 
 	if (buff != NULL)
 		buff = strcat(buff, formatted);
-
 
 	return true;
 }
