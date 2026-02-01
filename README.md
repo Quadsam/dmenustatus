@@ -16,23 +16,9 @@ git clone https://github.com/Quadsam/dmenu-statusbar.git
 
 - Build the package:
 
-  - With the `bootstrap.sh` script provided:
-
-  ``` bash
-  ./bootstrap.sh
-  make
-  ```
-
-  **Note:* pass `-s` to skip the `configure` step or pass any arguments
-  you want to run `./configure` with to this script*
-
-  - Or the regular way:
-
-  ``` bash
-  autoreconf --force --install --verbose
-  ./configure
-  make
-  ```
+``` bash
+make
+```
 
 - Install the package:
 
@@ -44,7 +30,7 @@ make install
 
 ``` license
 dmenustatus - a statusbar for dwm's dmenu
-Copyright (C) 2023  Quadsam
+Copyright (C) 2023-2026  Quadsam
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
