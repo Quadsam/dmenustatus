@@ -24,6 +24,7 @@
 #include <signal.h>
 #include <X11/Xlib.h>
 
+#define VERSION "0.9.3-alpha"
 #define BUFFER_SIZE 128
 
 Display *display;
