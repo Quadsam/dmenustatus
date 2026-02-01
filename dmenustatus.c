@@ -180,6 +180,7 @@ int main(void)
 	}
 
 	free(buffer);
+	XCloseDisplay(display);
 
 	return 0;
 }
