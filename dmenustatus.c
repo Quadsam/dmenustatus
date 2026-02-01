@@ -53,9 +53,8 @@ bool get_temp(char *buff)
 	if (file == NULL)
 		return false; // File doesnt exists
 
-	char *data = malloc(513);
-	if (fgets(data, 512, file) == NULL) {
-		free(data);
+	char data[16];
+	if (fgets(data, 16, file) == NULL) {
 		fclose(file);
 		return false; // File contains no data
 	}
@@ -64,7 +63,6 @@ bool get_temp(char *buff)
 	float temp = atof(data) / 1000;
 	char formatted[64];
 	sprintf(formatted, "| %02.0f°C ", temp);
-	free(data);
 
 	if (buff != NULL)
 		buff = strcat(buff, formatted);
