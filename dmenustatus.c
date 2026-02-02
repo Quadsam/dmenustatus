@@ -30,7 +30,7 @@
 #include <getopt.h>
 
 #define BUFFER_SIZE 128
-#define VERSION "0.9.5-alpha"
+#define VERSION "0.9.6-alpha"
 
 int verbose = 3;
 int test_count = 0;
@@ -155,10 +155,10 @@ bool has_nerd_font() {
 		if (FcPatternGetString(fs->fonts[i], FC_FAMILY, 0, &family) == FcResultMatch) {
 			if (strstr((char*)family, "Nerd Font")) {
 				found = true;
-				if (verbose == 1) writelog(4, "Found Nerd Fonts\n");
+				writelog(4, "Found Nerd Fonts\n");
 				break;
 			} else {
-				if (verbose == 1) writelog(4, "Couldn't find Nerd Fonts\n");
+				writelog(4, "Couldn't find Nerd Fonts\n");
 			}
 		}
 	}
@@ -171,10 +171,8 @@ static
 bool get_temp(char *buff, size_t buff_size)
 {
 	FILE *file = fopen("/sys/devices/virtual/thermal/thermal_zone0/temp", "r");
-	if (!file) {
-		writelog(3, "/sys/devices/virtual/thermal/thermal_zone0/temp does not exist");
+	if (!file)
 		return false;
-	}
 
 	char data[16];
 	if (fgets(data, sizeof(data), file) == NULL) {
@@ -202,10 +200,8 @@ static
 bool get_batt(char *buff, size_t buff_size)
 {
 	struct stat s;
-	if (stat("/sys/class/power_supply/BAT0/present", &s) == -1) {
-		writelog(3, "/sys/class/power_supply/BAT0/present does not exist");
+	if (stat("/sys/class/power_supply/BAT0/present", &s) == -1)
 		return false; // No battery installed
-	}
 
 
 	FILE *file = fopen("/sys/class/power_supply/BAT0/capacity", "r");
@@ -221,7 +217,9 @@ bool get_batt(char *buff, size_t buff_size)
 
 	fclose(file);
 
-	char *status = "󰂃"; // Set status to a question mark by default (not changed unless recognized)
+	char *status = "?";
+	// Set status to a question mark by default (not changed unless recognized)
+	if (use_nerd && strcmp(status, "?") == 0) status = "󰂃"; // Upgrade to icon if needed
 	file = fopen("/sys/class/power_supply/BAT0/status", "r");
 	if (file) {
 		if (fgets(data, sizeof(data), file)) {
@@ -331,7 +329,7 @@ int main(int argc, char **argv)
 		XStoreName(display, DefaultRootWindow(display), buffer);
 		XSync(display, False);
 
-		writelog(3, "Status update: '%s'", buffer);
+		writelog(4, "Status update: '%s'", buffer);
 
 		if (test_count > 0) {
 			test_count--;
