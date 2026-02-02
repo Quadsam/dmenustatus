@@ -14,85 +14,177 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include <fontconfig/fontconfig.h>
-#include <stdbool.h>
+#define _DEFAULT_SOURCE // Required for daemon() feature test macros
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
 #include <string.h>
-#include <sys/stat.h>
+#include <signal.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <X11/Xlib.h>
+#include <fontconfig/fontconfig.h>
+#include <getopt.h>
 
-#define VERSION "0.9.3-alpha"
 #define BUFFER_SIZE 128
+#define VERSION "0.9.5-alpha"
 
+int verbose = 3;
+int test_count = 0;
+bool daemonize = false;
+bool use_nerd = false;
+bool running = true;
 Display *display;
 
-int verbose = 0;
-int test_count = 0;
-bool running = true;
-bool use_nerd = false;
-bool daemonize = false;
-
-static bool has_nerd_font() {
-    bool found = false;
-    FcConfig* config = FcInitLoadConfigAndFonts();
-    
-    // We create a "pattern" to search for Nerd Fonts
-    FcPattern* pat = FcPatternCreate();
-    FcObjectSet* os = FcObjectSetBuild(FC_FAMILY, NULL);
-    FcFontSet* fs = FcFontList(config, pat, os);
-    FcConfigDestroy(config);
-    FcPatternDestroy(pat);
-    FcObjectSetDestroy(os);
-
-    for (int i = 0; fs && i < fs->nfont; i++) {
-        FcChar8* family;
-        if (FcPatternGetString(fs->fonts[i], FC_FAMILY, 0, &family) == FcResultMatch) {
-            if (strstr((char*)family, "Nerd Font")) {
-                found = true;
-                break;
-            }
-        }
-    }
-
-    FcFontSetDestroy(fs);
-    return found;
+static
+const char *getsig(int sig)
+{
+	switch (sig) {
+	case 1:  return "SIGHUP";
+	case 2:  return "SIGINT";
+	case 3:  return "SIGQUIT";
+	case 15: return "SIGTERM";
+	default: return "UNKNOWN";
+	}
 }
 
 static
-bool get_datetime(char *buff, size_t buff_size)
+void writelog(int level, const char *fmt, ...)
 {
-	if (!buff || buff_size == 0)
-		return false;
+	if (level > verbose) return;
 
-	time_t now = time(NULL);			// Get current time
-	struct tm *t = localtime(&now);		// Convert to local time structure
-	if (!t)
-		return false;
+	time_t now = time(NULL);
+	struct tm *t = localtime(&now);
+	char time_str[32];
+	strftime(time_str, sizeof(time_str), "%x %X", t);
 
-	strftime(buff, buff_size, " %I:%M:%S %p | %m/%d/%Y ", t);
+	const char *prefix;
+	switch (level) {
+	case 0: prefix = "FATAL"; break;
+	case 1: prefix = "ERROR"; break;
+	case 2: prefix = "WARN "; break;
+	case 3: prefix = "INFO "; break;
+	case 4: prefix = "DEBUG"; break;
+	default: prefix = "LOG  "; break;
+	}
 
-	return true;
+	fprintf(stderr, "[ %s ] %s: ", time_str, prefix);
+
+	va_list args;
+	va_start(args, fmt);
+	vfprintf(stderr, fmt, args);
+	va_end(args);
+
+	fprintf(stderr, "\n");
 }
 
+static
+void cleanup(int sig)
+{
+	running = false;
+	writelog(0, "Caught signal '%s'", getsig(sig));
+	return;
+}
+
+static
+void parse_args(int argc, char **argv)
+{
+	int c;
+	while ((c = getopt(argc, argv, ":dhqt:vV")) != -1)
+		switch (c)
+		{
+		case 'd':
+			daemonize = true;
+			break;
+		case 'h':
+			printf("Usage %s [OPTION]\n\n", argv[0]);
+			printf("Options:\n");
+			printf("  -d,      Run as a daemon.\n");
+			printf("  -h,      Display this help.\n");
+			printf("  -q,      Decrease verbosity.\n");
+			printf("  -t <n>,  Run main loop 'n' times.\n");
+			printf("  -v,      Increase the verbosity.\n");
+			printf("  -V,      Display program version.\n");
+			exit(EXIT_SUCCESS);
+			break;
+		case 'q':
+			if (verbose != 0) verbose--;
+			break;
+		case 't':
+			test_count = atoi(optarg);
+			if (test_count <= 0) test_count = 1;
+			break;
+		case 'v':
+			verbose++;
+			writelog(3, "Increasing verbosity to: %d", verbose);
+			break;
+		case 'V':
+			printf("%s v%s\n", argv[0], VERSION);
+			exit(EXIT_SUCCESS);
+			break;
+		case '?':
+			writelog(0, "Illegal option -- '-%c'", optopt);
+			exit(EXIT_FAILURE);
+			break;
+		case ':':
+			writelog(0, "Missing argument for -- '-%c'", optopt);
+			exit(EXIT_FAILURE);
+			break;
+		}
+	return;
+}
+
+static
+bool has_nerd_font() {
+	bool found = false;
+	FcConfig* config = FcInitLoadConfigAndFonts();
+	
+	// We create a "pattern" to search for Nerd Fonts
+	FcPattern* pat = FcPatternCreate();
+	FcObjectSet* os = FcObjectSetBuild(FC_FAMILY, NULL);
+	FcFontSet* fs = FcFontList(config, pat, os);
+	FcConfigDestroy(config);
+	FcPatternDestroy(pat);
+	FcObjectSetDestroy(os);
+
+	for (int i = 0; fs && i < fs->nfont; i++) {
+		FcChar8* family;
+		if (FcPatternGetString(fs->fonts[i], FC_FAMILY, 0, &family) == FcResultMatch) {
+			if (strstr((char*)family, "Nerd Font")) {
+				found = true;
+				if (verbose == 1) writelog(4, "Found Nerd Fonts\n");
+				break;
+			} else {
+				if (verbose == 1) writelog(4, "Couldn't find Nerd Fonts\n");
+			}
+		}
+	}
+
+	FcFontSetDestroy(fs);
+	return found;
+}
 
 static
 bool get_temp(char *buff, size_t buff_size)
 {
 	FILE *file = fopen("/sys/devices/virtual/thermal/thermal_zone0/temp", "r");
-	if (!file)
-		return false; // File doesnt exist
+	if (!file) {
+		writelog(3, "/sys/devices/virtual/thermal/thermal_zone0/temp does not exist");
+		return false;
+	}
 
 	char data[16];
 	if (fgets(data, sizeof(data), file) == NULL) {
+		writelog(1, "/sys/devices/virtual/thermal/thermal_zone0/temp has no data!");
 		fclose(file);
-		return false; // File has no data
+		return false;
 	}
 	fclose(file);
 
+	// Read the temperature as a floating point number
 	float temp = atof(data) / 1000.0f;
 
 	if (buff != NULL && buff_size > 0) {
@@ -110,13 +202,17 @@ static
 bool get_batt(char *buff, size_t buff_size)
 {
 	struct stat s;
-	if (stat("/sys/class/power_supply/BAT0/present", &s) == -1)
+	if (stat("/sys/class/power_supply/BAT0/present", &s) == -1) {
+		writelog(3, "/sys/class/power_supply/BAT0/present does not exist");
 		return false; // No battery installed
+	}
 
 
 	FILE *file = fopen("/sys/class/power_supply/BAT0/capacity", "r");
-	if (!file)
+	if (!file) {
+		writelog(1, "/sys/class/power_supply/BAT0/capacity is missing!");
 		return false;
+	}
 
 	char data[16];
 	int level = 0;
@@ -158,72 +254,20 @@ bool get_batt(char *buff, size_t buff_size)
 }
 
 static
-void parse_args(int argc, char **argv)
+bool get_datetime(char *buff, size_t buff_size)
 {
-	int c;
-	while ((c = getopt(argc, argv, ":dhqt:vV")) != -1)
-		switch (c)
-		{
-		case 'd':
-			daemonize = true;
-			break;
-		case 'h':
-			printf("Usage %s [OPTION]\n\n", argv[0]);
-			printf("Options:\n");
-			printf("  -d,      Run as a daemon.\n");
-			printf("  -h,      Display this help.\n");
-			printf("  -q,      Decrease verbosity.\n");
-			printf("  -t <n>,  Run main loop 'n' times.\n");
-			printf("  -v,      Increase the verbosity.\n");
-			printf("  -V,      Display program version.\n");
-			exit(EXIT_SUCCESS);
-			break;
-		case 'q':
-			if (verbose != 0) verbose--;
-			break;
-		case 't':
-			test_count = atoi(optarg);
-			if (test_count <= 0) test_count = 1;
-			break;
-		case 'v':
-			verbose++;
-			printf("Increasing verbosity\n");
-			break;
-		case 'V':
-			printf("%s v%s\n", argv[0], VERSION);
-			exit(EXIT_SUCCESS);
-			break;
-		case '?':
-			printf("Illegal option -- '-%c'\n", optopt);
-			exit(EXIT_FAILURE);
-			break;
-		case ':':
-			printf("Missing argument for -- '-%c'\n", optopt);
-			exit(EXIT_FAILURE);
-			break;
-		}
-	return;
+	if (!buff || buff_size == 0)
+		return false;
+
+	time_t now = time(NULL);			// Get current time
+	struct tm *t = localtime(&now);		// Convert to local time structure
+	if (!t)
+		return false;
+
+	strftime(buff, buff_size, " %I:%M:%S %p | %m/%d/%Y ", t);
+
+	return true;
 }
-
-static
-void cleanup(int sig) {
-	running = false;
-	printf("Caught signal %d\n", sig);
-	return;
-}
-
-
-/*
-	TODO: Rewrite logging system
-	TODO: - Fatal
-	TODO: - Error
-	TODO: - Warning
-	TODO: - Info
-	TODO: - Debug
-	TODO: Rewrite daemonizing
-	TODO: - setsid()
-	TODO: - execvp()
-*/
 
 int main(int argc, char **argv)
 {
@@ -235,26 +279,45 @@ int main(int argc, char **argv)
 
 	parse_args(argc, argv);
 
+	if (daemonize) {
+		writelog(3, "Daemonizing!");
+		if (daemon(0, 1) < 0) {
+			writelog(0, "Failed to daemonize process");
+			perror("daemon");
+			exit(EXIT_FAILURE);
+		}
+	}
+
 	// Open the X display
 	if (!(display = XOpenDisplay(NULL)))
 	{
-		printf("Error: Cannot open display.\n");
+		writelog(0, "Cannot open X11 display. Is X server running?");
 		exit(EXIT_FAILURE);
 	}
+
 	use_nerd = has_nerd_font();
 
 	// Allocate and zero our buffer
 	char *buffer = malloc(BUFFER_SIZE);
-	if (!buffer) return 1;
+	if (!buffer) {
+		writelog(0, "Memory allocation failed for main buffer");
+		XCloseDisplay(display);
+		return 1;
+	}
 
 	bool enable_temp = get_temp(NULL, 0);
 	bool enable_batt = get_batt(NULL, 0);
+
+	writelog(3, "Starting main loop. Temp: %s, Battery: %s", 
+				enable_temp ? "Enabled" : "Disabled", 
+				enable_batt ? "Enabled" : "Disabled");
+
 	while (running) {
 		buffer[0] = '\0'; // Clear our buffer
 
 		// Begins the buffer with the current time and date (HH:MM:SS %p | MM/DD/YYYY)
 		if (!get_datetime(buffer, BUFFER_SIZE)) {
-			fprintf(stderr, "Error: Unable to get current date and time, something is wrong.\n");
+			writelog(1, "Unable to get current date and time, something is wrong!");
 			break;
 		}
 
@@ -268,7 +331,7 @@ int main(int argc, char **argv)
 		XStoreName(display, DefaultRootWindow(display), buffer);
 		XSync(display, False);
 
-		if (verbose > 0) printf("'%s'\n", buffer);
+		writelog(3, "Status update: '%s'", buffer);
 
 		if (test_count > 0) {
 			test_count--;
@@ -279,8 +342,10 @@ int main(int argc, char **argv)
 		if (running) sleep(1);
 	}
 
+	writelog(3, "Cleaning up resources");
 	free(buffer);
 	XCloseDisplay(display);
+	writelog(3, "Exiting");
 
 	return 0;
 }
