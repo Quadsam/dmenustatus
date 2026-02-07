@@ -27,9 +27,6 @@ test: $(PROGRAM).c
 	@${MAKE} --no-print-directory clean
 	splint $<
 
-man: $(PROGRAM).1
-	gzip -c9 $< >$(PROGRAM).1.gz
-
 dist: clean
 	@echo "  DIST	$(PROGRAM)-dist.tar.gz"
 	@mkdir -p $(PROGRAM)-dist
@@ -38,14 +35,14 @@ dist: clean
 	@gzip -9 $(PROGRAM)-dist.tar
 	@rm -rf $(PROGRAM)-dist
 
-install: all man
+install: all
 	@echo "  I	bin $(PROGRAM) to $(DESTDIR)$(BINDIR)"
 	@install -Dm755 $(PROGRAM) $(DESTDIR)$(BINDIR)/$(PROGRAM)
 	@echo "  I	doc to $(DESTDIR)$(DOCDIR)"
 	@install -Dm644 README.md $(DESTDIR)$(DOCDIR)/README.md
 	@install -Dm644 LICENSE $(DESTDIR)$(DOCDIR)/LICENSE
 	@echo "  I	man to $(DESTDIR)$(MANDIR)/man1"
-	@install -Dm644 dmenustatus.1.gz $(DESTDIR)$(MANDIR)/man1/$(PROGRAM).1
+	@install -Dm644 dmenustatus.1 $(DESTDIR)$(MANDIR)/man1/$(PROGRAM).1
 
 uninstall:
 	@echo "  RM	$(DESTDIR)$(BINDIR)/$(PROGRAM)"
