@@ -170,13 +170,16 @@ bool has_nerd_font() {
 static
 bool get_temp(char *buff, size_t buff_size)
 {
-	FILE *file = fopen("/sys/devices/virtual/thermal/thermal_zone0/temp", "r");
-	if (!file)
-		return false;
+	FILE *file = fopen("/sys/class/hwmon/hwmon4/temp1_input", "r");
+	if (!file) {
+		file = fopen("/sys/devices/virtual/thermal/thermal_zone0/temp", "r");
+		if (!file)
+			return false;
+	}
 
 	char data[16];
 	if (fgets(data, sizeof(data), file) == NULL) {
-		writelog(1, "/sys/devices/virtual/thermal/thermal_zone0/temp has no data!");
+		writelog(1, "temperature file has no data!");
 		fclose(file);
 		return false;
 	}
