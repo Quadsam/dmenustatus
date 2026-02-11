@@ -6,12 +6,24 @@ A statusbar for dmenu
 if you have any issues feel free to make an issue and I will try to help
 to the best of my abilities. (Pull requests are also welcome)**
 
-## Building
+## Installing
+
+### Arch Linux
+
+The package `dmenustatus-git` is avaliable on the Arch Linux User
+Repository (AUR). To install you need AUR helper such as `yay(1)`, `yay` is
+used here.
+
+```bash
+yay -S dmenustatus-git
+```
+
+### From Source
 
 - Clone the source repo:
 
 ``` bash
-git clone https://github.com/Quadsam/dmenu-statusbar.git
+git clone https://github.com/Quadsam/dmenustatus.git
 ```
 
 - Build the package:
@@ -23,7 +35,7 @@ make
 - Install the package:
 
 ``` bash
-sudo make install
+sudo make PREFIX='/usr/local' install
 ```
 
 ## License
@@ -45,3 +57,8 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```
+
+
+## TODO/BUGS
+
+- Fix reading battery level from dynamic path
