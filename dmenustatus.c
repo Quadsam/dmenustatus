@@ -1,18 +1,6 @@
 // dmenustatus - a statusbar for dwm's dmenu
 // Copyright (C) 2023-2026  Quadsam
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// Licensed under GNU Affero General Public License v3.0
 
 #define _DEFAULT_SOURCE // Required for daemon() feature test macros
 
@@ -28,16 +16,23 @@
 #include <X11/Xlib.h>
 #include <fontconfig/fontconfig.h>
 #include <getopt.h>
+#include <poll.h>
+#include <alsa/asoundlib.h>
 
 #define BUFFER_SIZE 128
-#define VERSION "0.9.6-alpha"
+#define VERSION "0.10.1-beta"
 
+/* Globals */
 int verbose = 3;
 int test_count = 0;
 bool daemonize = false;
 bool use_nerd = false;
 bool running = true;
+
 Display *display;
+snd_mixer_t *mixer_handle = NULL; // Persistent ALSA connection
+
+/* Helper functions */
 
 static
 const char *getsig(int sig)
@@ -86,7 +81,31 @@ void cleanup(int sig)
 {
 	running = false;
 	writelog(0, "Caught signal '%s'", getsig(sig));
-	return;
+}
+
+/* Setup functions */
+
+static
+void init_mixer()
+{
+	// Open the mixer once and keep it open
+	if (snd_mixer_open(&mixer_handle, 0) < 0) {
+		writelog(1, "Failed to open ALSA mixer");
+		return;
+	}
+	if (snd_mixer_attach(mixer_handle, "default") < 0) {
+		writelog(1, "Failed to attach default card");
+		return;
+	}
+	if (snd_mixer_selem_register(mixer_handle, NULL, NULL) < 0) {
+		writelog(1, "Failed to register mixer elements");
+		return;
+	}
+	if (snd_mixer_load(mixer_handle) < 0) {
+		writelog(1, "Failed to load mixer elements");
+		return;
+	}
+	writelog(3, "ALSA mixer initialized");
 }
 
 static
@@ -157,24 +176,70 @@ bool has_nerd_font() {
 				found = true;
 				writelog(4, "Found Nerd Fonts\n");
 				break;
-			} else {
-				writelog(4, "Couldn't find Nerd Fonts\n");
 			}
 		}
 	}
-
 	FcFontSetDestroy(fs);
 	return found;
+}
+
+/* Modules */
+
+static
+bool get_vol(char *buff, size_t buff_size)
+{
+	if (!mixer_handle) return false;
+
+	long min, max, vol;
+	int switch_state;
+	snd_mixer_selem_id_t *sid;
+
+	// Find "Master" element
+	snd_mixer_selem_id_alloca(&sid);
+	snd_mixer_selem_id_set_index(sid, 0);
+	snd_mixer_selem_id_set_name(sid, "Master");
+	snd_mixer_elem_t *elem = snd_mixer_find_selem(mixer_handle, sid);
+
+	if (!elem) return false;
+
+	// Get Volume Range & Value
+	snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
+	snd_mixer_selem_get_playback_volume(elem, SND_MIXER_SCHN_MONO, &vol);
+
+	// Check Mute Status (Switch) -> 0 = Muted, 1 = Unmuted
+	if (snd_mixer_selem_has_playback_switch(elem))
+		snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &switch_state);
+	else
+		switch_state = 1; 
+
+	// Calculate Percentage
+	// Avoid division by zero if min == max
+	int percentage = 0;
+	if (max - min > 0) {
+		percentage = (int)(((float)(vol - min) / (max - min)) * 100);
+	}
+
+	if (buff && buff_size > 0) {
+		size_t len = strlen(buff);
+		if (len < buff_size) {
+			const char *icon = (switch_state) ? "VOL" : "MUT";
+			snprintf(buff + len, buff_size - len, "| %s %d%% ", icon, percentage);
+		}
+	}
+	return true;
 }
 
 static
 bool get_temp(char *buff, size_t buff_size)
 {
-	FILE *file = fopen("/sys/class/hwmon/hwmon4/temp1_input", "r");
+	FILE *file = fopen("/sys/class/hwmon/hwmon3/temp1_input", "r");
 	if (!file) {
+		writelog(1, "Could not open /sys/class/hwmon/hwmon3/temp1_input");
 		file = fopen("/sys/devices/virtual/thermal/thermal_zone0/temp", "r");
-		if (!file)
+		if (!file) {
+			writelog(1, "Could not open /sys/devices/virtual/thermal/thermal_zone0/temp");
 			return false;
+		}
 	}
 
 	char data[16];
@@ -195,7 +260,6 @@ bool get_temp(char *buff, size_t buff_size)
 		if (len + 1 < buff_size)
 			snprintf(buff + len, buff_size - len, "| %02.0f°C ", temp);
 	}
-
 	return true;
 }
 
@@ -257,16 +321,11 @@ bool get_batt(char *buff, size_t buff_size)
 static
 bool get_datetime(char *buff, size_t buff_size)
 {
-	if (!buff || buff_size == 0)
-		return false;
-
+	if (!buff || buff_size == 0) return false;
 	time_t now = time(NULL);			// Get current time
 	struct tm *t = localtime(&now);		// Convert to local time structure
-	if (!t)
-		return false;
-
+	if (!t) return false;
 	strftime(buff, buff_size, " %I:%M:%S %p | %m/%d/%Y ", t);
-
 	return true;
 }
 
@@ -290,13 +349,14 @@ int main(int argc, char **argv)
 	}
 
 	// Open the X display
-	if (!(display = XOpenDisplay(NULL)))
-	{
+	if (!(display = XOpenDisplay(getenv("DISPLAY")))) {
 		writelog(0, "Cannot open X11 display. Is X server running?");
 		exit(EXIT_FAILURE);
 	}
+	Window window = DefaultRootWindow(display);
 
 	use_nerd = has_nerd_font();
+	init_mixer();	// Initialize ALSA persistent connection
 
 	// Allocate and zero our buffer
 	char *buffer = malloc(BUFFER_SIZE);
@@ -308,10 +368,25 @@ int main(int argc, char **argv)
 
 	bool enable_temp = get_temp(NULL, 0);
 	bool enable_batt = get_batt(NULL, 0);
+	bool enable_vol  = get_vol(NULL, 0);
 
-	writelog(3, "Starting main loop. Temp: %s, Battery: %s", 
+	/* POLL SETUP */
+	// Calculate how many file descriptors ALSA needs
+	int alsa_count = 0;
+	struct pollfd *fds = NULL;
+
+	if (mixer_handle) {
+		alsa_count = snd_mixer_poll_descriptors_count(mixer_handle);
+		if (alsa_count > 0) {
+			fds = calloc (alsa_count, sizeof(struct pollfd));
+			snd_mixer_poll_descriptors(mixer_handle, fds, alsa_count);
+		}
+	}
+
+	writelog(3, "Starting event loop. Temp: %s, Battery: %s, Volume: %s", 
 				enable_temp ? "Enabled" : "Disabled", 
-				enable_batt ? "Enabled" : "Disabled");
+				enable_batt ? "Enabled" : "Disabled",
+				enable_vol  ? "Enabled" : "Disabled");
 
 	while (running) {
 		buffer[0] = '\0'; // Clear our buffer
@@ -324,29 +399,43 @@ int main(int argc, char **argv)
 
 		// Concatenate the CPU temp to the buffer (00°C)
 		if (enable_temp) get_temp(buffer, BUFFER_SIZE);
-
 		// Concatenate the battery level to the buffer (00°C)
 		if (enable_batt) get_batt(buffer, BUFFER_SIZE);
+		// Concatenate the current volume level to the buffer
+		if (enable_vol)  get_vol(buffer, BUFFER_SIZE);
 
 		// Write buffer to X display
-		XStoreName(display, DefaultRootWindow(display), buffer);
+		XStoreName(display, window, buffer);
 		XSync(display, False);
 
 		writelog(4, "Status update: '%s'", buffer);
 
-		if (test_count > 0) {
-			test_count--;
-			if (test_count == 0)
-				running = false;
-		}
+		if (test_count > 0 && --test_count == 0) running = false;
 
-		if (running) sleep(1);
+		if (running) {
+			// The event loop
+			// Wait 1 second OR until ALSA wakes us up
+			if (mixer_handle && fds) {
+				int err = poll(fds, alsa_count, 1000);
+
+				// If poll returns > 0, it means an event happened!
+				if (err > 0) {
+					// Clear the event so we don't loop infinitely
+					snd_mixer_handle_events(mixer_handle);
+					// The loop immediately restarts, updating instantly
+				}
+			} else {
+				// Fallback if ALSA failed: just sleep
+				sleep(1);
+			}
+		}
 	}
 
 	writelog(3, "Cleaning up resources");
+	if (fds) free(fds);
+	if (mixer_handle) snd_mixer_close(mixer_handle);
 	free(buffer);
 	XCloseDisplay(display);
 	writelog(3, "Exiting");
-
 	return 0;
 }

@@ -1,7 +1,7 @@
-CC       := gcc
-CPPFLAGS += `pkg-config --cflags-only-I x11 fontconfig`
-CFLAGS   += -Wall -Werror -ggdb -O0 `pkg-config --cflags-only-other x11 fontconfig`
-LDFLAGS  += `pkg-config --libs x11 fontconfig`
+CC       := clang
+CPPFLAGS += `pkg-config --cflags-only-I x11 fontconfig alsa`
+CFLAGS   += -Wall -Wextra -Werror -ggdb -O0 `pkg-config --cflags-only-other x11 fontconfig alsa`
+LDFLAGS  += `pkg-config --libs x11 fontconfig alsa`
 PROGRAM   = dmenustatus
 
 
