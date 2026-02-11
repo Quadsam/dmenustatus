@@ -1,0 +1,3 @@
+[submodule "dmenustatus-git"]
+	path = dmenustatus-git
+	url = ssh://aur@aur.archlinux.org/dmenustatus-git.git
