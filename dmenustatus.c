@@ -20,7 +20,7 @@
 #include <alsa/asoundlib.h>
 
 #define BUFFER_SIZE 128
-#define VERSION "0.10.1-beta"
+#define VERSION "0.10.2"
 
 /* Globals */
 int verbose = 3;
