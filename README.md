@@ -2,9 +2,9 @@
 
 A statusbar for dmenu
 
-**This package is still in early alpha and may not work on your system,
+**This package is still in beta and may not work on your system, but
 if you have any issues feel free to make an issue and I will try to help
-to the best of my abilities. (Pull requests are welcome)**
+to the best of my abilities. (Pull requests are also welcome)**
 
 ## Building
 
@@ -23,7 +23,7 @@ make
 - Install the package:
 
 ``` bash
-make install
+sudo make install
 ```
 
 ## License
