@@ -18,6 +18,7 @@
 #include <getopt.h>
 #include <poll.h>
 #include <alsa/asoundlib.h>
+#include <sensors/sensors.h>
 
 #define BUFFER_SIZE 128
 #define VERSION "0.10.2"
@@ -160,7 +161,7 @@ static
 bool has_nerd_font() {
 	bool found = false;
 	FcConfig* config = FcInitLoadConfigAndFonts();
-	
+
 	// We create a "pattern" to search for Nerd Fonts
 	FcPattern* pat = FcPatternCreate();
 	FcObjectSet* os = FcObjectSetBuild(FC_FAMILY, NULL);
@@ -232,33 +233,42 @@ bool get_vol(char *buff, size_t buff_size)
 static
 bool get_temp(char *buff, size_t buff_size)
 {
-	FILE *file = fopen("/sys/class/hwmon/hwmon3/temp1_input", "r");
-	if (!file) {
-		writelog(1, "Could not open /sys/class/hwmon/hwmon3/temp1_input");
-		file = fopen("/sys/devices/virtual/thermal/thermal_zone0/temp", "r");
-		if (!file) {
-			writelog(1, "Could not open /sys/devices/virtual/thermal/thermal_zone0/temp");
-			return false;
+	const sensors_chip_name *chip;
+	int chip_nr = 0;
+	double val = -1.0;
+	bool found = false;
+
+	// Iterate through chips to find the CPU temperature
+	while ((chip = sensors_get_detected_chips(NULL, &chip_nr))) {
+		const sensors_feature *feature;
+		int feature_nr = 0;
+
+		while ((feature = sensors_get_features(chip, &feature_nr))) {
+			char *label = sensors_get_label(chip, feature);
+
+			// Filter for the main Package temperature
+			if (label && strstr(label, "CPU Temperature")) {
+				const sensors_subfeature *sub = sensors_get_subfeature(chip, feature, SENSORS_SUBFEATURE_TEMP_INPUT);
+				if (sub && sensors_get_value(chip, sub->number, &val) == 0) {
+					found = true;
+					free(label);
+					break;
+				}
+			}
+			free(label);
 		}
+		if (found) break;
 	}
 
-	char data[16];
-	if (fgets(data, sizeof(data), file) == NULL) {
-		writelog(1, "temperature file has no data!");
-		fclose(file);
+	if (!found) {
+		writelog(1, "Could not find CPU temperature via libsensors");
 		return false;
 	}
-	fclose(file);
-
-	// Read the temperature as a floating point number
-	float temp = atof(data) / 1000.0f;
 
 	if (buff != NULL && buff_size > 0) {
 		size_t len = strlen(buff);
-
-		// Make sure there is space here
 		if (len + 1 < buff_size)
-			snprintf(buff + len, buff_size - len, "| %02.0f°C ", temp);
+			snprintf(buff + len, buff_size - len, "| %.0f°C ", val);
 	}
 	return true;
 }
@@ -366,6 +376,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	if (sensors_init(NULL) != 0)
+		writelog(1, "Failed to initialize libsensors");
+
 	bool enable_temp = get_temp(NULL, 0);
 	bool enable_batt = get_batt(NULL, 0);
 	bool enable_vol  = get_vol(NULL, 0);
@@ -436,6 +449,7 @@ int main(int argc, char **argv)
 	if (mixer_handle) snd_mixer_close(mixer_handle);
 	free(buffer);
 	XCloseDisplay(display);
+	sensors_cleanup();
 	writelog(3, "Exiting");
 	return 0;
 }
