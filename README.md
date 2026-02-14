@@ -1,18 +1,13 @@
 # dmenustatus
 
-A statusbar for dmenu
-
-**This package is still in beta and may not work on your system, but
-if you have any issues feel free to make an issue and I will try to help
-to the best of my abilities. (Pull requests are also welcome)**
+A basic status bar for dmenu.
 
 ## Installing
 
 ### Arch Linux
 
-The package `dmenustatus-git` is avaliable on the Arch Linux User
-Repository (AUR). To install you need AUR helper such as `yay(1)`, `yay` is
-used here.
+The package `dmenustatus-git` is avaliable on the Arch User Repository (AUR).
+To install you need AUR helper such as `yay(1)`.
 
 ```bash
 yay -S dmenustatus-git
@@ -61,4 +56,4 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ## TODO/BUGS
 
-- Fix reading battery level from dynamic path
+- [x] ~~Fix reading battery level from dynamic path~~
