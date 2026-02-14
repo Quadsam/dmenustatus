@@ -14,7 +14,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <X11/Xlib.h>
-#include <fontconfig/fontconfig.h>
 #include <getopt.h>
 #include <poll.h>
 #include <alsa/asoundlib.h>
@@ -30,8 +29,8 @@
 Display *display;
 int verbose = 3;
 int test_count = 0;
+bool daemonize = false;
 bool running = true;
-bool use_nerd = false;
 bool daemonize = false;
 snd_mixer_t *mixer_handle = NULL; // Persistent ALSA connection
 
@@ -158,35 +157,6 @@ void parse_args(int argc, char **argv)
 	return;
 }
 
-// Check for nerd fonts
-static
-bool has_nerd_font() {
-	bool found = false;
-	FcConfig* config = FcInitLoadConfigAndFonts();
-
-	// We create a "pattern" to search for Nerd Fonts
-	FcPattern* pat = FcPatternCreate();
-	FcObjectSet* os = FcObjectSetBuild(FC_FAMILY, NULL);
-	FcFontSet* fs = FcFontList(config, pat, os);
-	FcConfigDestroy(config);
-	FcPatternDestroy(pat);
-	FcObjectSetDestroy(os);
-
-	for (int i = 0; fs && i < fs->nfont; i++) {
-		FcChar8* family;
-		if (FcPatternGetString(fs->fonts[i], FC_FAMILY, 0, &family) == FcResultMatch) {
-			if (strstr((char*)family, "Nerd Font")) {
-				found = true;
-				writelog(4, "Found Nerd Fonts\n");
-				break;
-			}
-		}
-	}
-	FcFontSetDestroy(fs);
-	return found;
-}
-
-
 /* ========================================================================= */
 /* MODULES																	 */
 /* ========================================================================= */
@@ -296,30 +266,18 @@ bool get_batt(char *buff, size_t buff_size)
 
 	fclose(file);
 
+	// Default status
 	char *status = "?";
-	// Set status to a question mark by default (not changed unless recognized)
-	if (use_nerd && strcmp(status, "?") == 0) status = "󰂃"; // Upgrade to icon if needed
 	file = fopen("/sys/class/power_supply/BAT0/status", "r");
-	if (file) {
-		if (fgets(data, sizeof(data), file)) {
-			if (use_nerd) {
-				switch (data[0]) {
-					case 'D': status = "󰂍"; break; // D(ischarging)
-					case 'N': status = "󰂄"; break; // N(ot charging)
-					case 'F': status = "󰂄"; break; // F(ull)
-					case 'C': status = "󰂐"; break; // C(harging)
-				}
-			} else {
-				switch (data[0]) {
-					case 'D': status = "v"; break; // D(ischarging)
-					case 'N': status = "-"; break; // N(ot charging)
-					case 'F': status = " "; break; // F(ull)
-					case 'C': status = "^"; break; // C(harging)
-				}
-			}
+	if (file && fgets(data, sizeof(data), file)) {
+		switch (data[0]) {
+		case 'D': status = "v"; break; // D(ischarging)
+		case 'N': status = "-"; break; // N(ot charging)
+		case 'F': status = " "; break; // F(ull)
+		case 'C': status = "^"; break; // C(harging)
 		}
-		fclose(file);
 	}
+	fclose(file);
 
 	if (buff != NULL && buff_size > 0) {
 		size_t len = strlen(buff);
@@ -374,11 +332,8 @@ int main(int argc, char **argv)
 	}
 	Window window = DefaultRootWindow(display);
 
-	// Get (true, false) nerd fonts installed
-	use_nerd = has_nerd_font();
+	init_mixer();	// Initialize ALSA persistent connection
 
-	// Initialize ALSA persistent connection
-	init_mixer();
 	// Allocate and zero our buffer
 	char *buffer = malloc(BUFFER_SIZE);
 	if (!buffer) {
