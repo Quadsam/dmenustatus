@@ -19,32 +19,28 @@
 #include <alsa/asoundlib.h>
 #include <sensors/sensors.h>
 
-#define BUFFER_SIZE 128
-#define VERSION "0.10.2"
+/* ========================================================================= */
+/* GLOBALS																	 */
+/* ========================================================================= */
 
-/* Globals */
+#define BUFFER_SIZE 128
+#define VERSION "0.10.3"
+
+Display *display;
 int verbose = 3;
 int test_count = 0;
 bool daemonize = false;
 bool running = true;
-
-Display *display;
+bool daemonize = false;
 snd_mixer_t *mixer_handle = NULL; // Persistent ALSA connection
 
-/* Helper functions */
+/* ========================================================================= */
+/* HELPER FUNCTIONS															 */
+/* ========================================================================= */
 
-static
-const char *getsig(int sig)
-{
-	switch (sig) {
-	case 1:  return "SIGHUP";
-	case 2:  return "SIGINT";
-	case 3:  return "SIGQUIT";
-	case 15: return "SIGTERM";
-	default: return "UNKNOWN";
-	}
-}
-
+// Logging function
+//   level    = 0-5 (FATAL, ERROR, WARN, INFO, DEBUG, LOG)
+//   fmt, ... = format string (like printf)
 static
 void writelog(int level, const char *fmt, ...)
 {
@@ -57,12 +53,12 @@ void writelog(int level, const char *fmt, ...)
 
 	const char *prefix;
 	switch (level) {
-	case 0: prefix = "FATAL"; break;
-	case 1: prefix = "ERROR"; break;
-	case 2: prefix = "WARN "; break;
-	case 3: prefix = "INFO "; break;
-	case 4: prefix = "DEBUG"; break;
-	default: prefix = "LOG  "; break;
+		case 0: prefix = "FATAL"; break;
+		case 1: prefix = "ERROR"; break;
+		case 2: prefix = "WARN "; break;
+		case 3: prefix = "INFO "; break;
+		case 4: prefix = "DEBUG"; break;
+		default: prefix = "LOG  "; break;
 	}
 
 	fprintf(stderr, "[ %s ] %s: ", time_str, prefix);
@@ -75,38 +71,44 @@ void writelog(int level, const char *fmt, ...)
 	fprintf(stderr, "\n");
 }
 
+// Get signal name from signal number
+static
+const char *getsig(int sig)
+{
+	switch (sig) {
+		case 1:  return "SIGHUP";
+		case 2:  return "SIGINT";
+		case 3:  return "SIGQUIT";
+		case 15: return "SIGTERM";
+		default: return "UNKNOWN";
+	}
+}
+
+// Cleanup when we are told to quit
 static
 void cleanup(int sig)
 {
-	running = false;
 	writelog(0, "Caught signal '%s'", getsig(sig));
+	running = false;
 }
 
-/* Setup functions */
+/* ========================================================================= */
+/* SETUP FUNCTIONS															 */
+/* ========================================================================= */
 
+// Open a handle to ALSA
 static
 void init_mixer()
 {
 	// Open the mixer once and keep it open
-	if (snd_mixer_open(&mixer_handle, 0) < 0) {
-		writelog(1, "Failed to open ALSA mixer");
-		return;
-	}
-	if (snd_mixer_attach(mixer_handle, "default") < 0) {
-		writelog(1, "Failed to attach default card");
-		return;
-	}
-	if (snd_mixer_selem_register(mixer_handle, NULL, NULL) < 0) {
-		writelog(1, "Failed to register mixer elements");
-		return;
-	}
-	if (snd_mixer_load(mixer_handle) < 0) {
-		writelog(1, "Failed to load mixer elements");
-		return;
-	}
+	if (snd_mixer_open(&mixer_handle, 0) < 0) { writelog(1, "Failed to open ALSA mixer"); return; }
+	if (snd_mixer_attach(mixer_handle, "default") < 0) { writelog(1, "Failed to attach default card"); return; }
+	if (snd_mixer_selem_register(mixer_handle, NULL, NULL) < 0) { writelog(1, "Failed to register mixer elements"); return; }
+	if (snd_mixer_load(mixer_handle) < 0) { writelog(1, "Failed to load mixer elements"); return; }
 	writelog(3, "ALSA mixer initialized");
 }
 
+// Parse command line arguments
 static
 void parse_args(int argc, char **argv)
 {
@@ -155,7 +157,9 @@ void parse_args(int argc, char **argv)
 	return;
 }
 
-/* Modules */
+/* ========================================================================= */
+/* MODULES																	 */
+/* ========================================================================= */
 
 static
 bool get_vol(char *buff, size_t buff_size)
@@ -182,7 +186,7 @@ bool get_vol(char *buff, size_t buff_size)
 	if (snd_mixer_selem_has_playback_switch(elem))
 		snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &switch_state);
 	else
-		switch_state = 1; 
+		switch_state = 1;
 
 	// Calculate Percentage
 	// Avoid division by zero if min == max
@@ -211,14 +215,11 @@ bool get_temp(char *buff, size_t buff_size)
 
 	// Iterate through chips to find the CPU temperature
 	while ((chip = sensors_get_detected_chips(NULL, &chip_nr))) {
-		const sensors_feature *feature;
 		int feature_nr = 0;
-
+		const sensors_feature *feature;
 		while ((feature = sensors_get_features(chip, &feature_nr))) {
 			char *label = sensors_get_label(chip, feature);
-
-			// Filter for the main Package temperature
-			if (label && strstr(label, "CPU Temperature")) {
+			if (label && strstr(label, "CPU Temperature")) {	// Filter for the main temperature
 				const sensors_subfeature *sub = sensors_get_subfeature(chip, feature, SENSORS_SUBFEATURE_TEMP_INPUT);
 				if (sub && sensors_get_value(chip, sub->number, &val) == 0) {
 					found = true;
@@ -298,6 +299,12 @@ bool get_datetime(char *buff, size_t buff_size)
 	return true;
 }
 
+
+
+/* ========================================================================= */
+/* MAIN ENTRY POINT															 */
+/* ========================================================================= */
+
 int main(int argc, char **argv)
 {
 	// Cleanup on these signals
@@ -306,19 +313,20 @@ int main(int argc, char **argv)
 	signal(SIGQUIT, cleanup);
 	signal(SIGTERM, cleanup);
 
+	// Read command line arguments
 	parse_args(argc, argv);
 
 	if (daemonize) {
 		writelog(3, "Daemonizing!");
 		if (daemon(0, 1) < 0) {
 			writelog(0, "Failed to daemonize process");
-			perror("daemon");
-			exit(EXIT_FAILURE);
+			perror("daemon"); exit(EXIT_FAILURE);
 		}
 	}
 
 	// Open the X display
-	if (!(display = XOpenDisplay(getenv("DISPLAY")))) {
+	display = XOpenDisplay(getenv("DISPLAY"));
+	if (!display) {
 		writelog(0, "Cannot open X11 display. Is X server running?");
 		exit(EXIT_FAILURE);
 	}
@@ -345,7 +353,6 @@ int main(int argc, char **argv)
 	// Calculate how many file descriptors ALSA needs
 	int alsa_count = 0;
 	struct pollfd *fds = NULL;
-
 	if (mixer_handle) {
 		alsa_count = snd_mixer_poll_descriptors_count(mixer_handle);
 		if (alsa_count > 0) {
@@ -354,11 +361,12 @@ int main(int argc, char **argv)
 		}
 	}
 
-	writelog(3, "Starting event loop. Temp: %s, Battery: %s, Volume: %s", 
-				enable_temp ? "Enabled" : "Disabled", 
+	writelog(3, "Starting event loop. Temp: %s, Battery: %s, Volume: %s",
+				enable_temp ? "Enabled" : "Disabled",
 				enable_batt ? "Enabled" : "Disabled",
 				enable_vol  ? "Enabled" : "Disabled");
 
+	// Main POLL loop
 	while (running) {
 		buffer[0] = '\0'; // Clear our buffer
 
@@ -368,33 +376,25 @@ int main(int argc, char **argv)
 			break;
 		}
 
-		// Concatenate the CPU temp to the buffer (00°C)
+		// Concatenate the CPU temp (00°C), battery level (00%), and volume level (VOL 00%) to the buffer
 		if (enable_temp) get_temp(buffer, BUFFER_SIZE);
-		// Concatenate the battery level to the buffer (00°C)
 		if (enable_batt) get_batt(buffer, BUFFER_SIZE);
-		// Concatenate the current volume level to the buffer
 		if (enable_vol)  get_vol(buffer, BUFFER_SIZE);
 
-		// Write buffer to X display
+		// Write buffer to X display (and DEBUG log)
 		XStoreName(display, window, buffer);
 		XSync(display, False);
-
 		writelog(4, "Status update: '%s'", buffer);
 
-		if (test_count > 0 && --test_count == 0) running = false;
+		if (test_count > 0 && --test_count == 0)
+			running = false;
 
 		if (running) {
-			// The event loop
 			// Wait 1 second OR until ALSA wakes us up
 			if (mixer_handle && fds) {
-				int err = poll(fds, alsa_count, 1000);
-
-				// If poll returns > 0, it means an event happened!
-				if (err > 0) {
-					// Clear the event so we don't loop infinitely
+				// If poll returns > 0, we clear the event and restart the loop
+				if (poll(fds, alsa_count, 1000) > 0)
 					snd_mixer_handle_events(mixer_handle);
-					// The loop immediately restarts, updating instantly
-				}
 			} else {
 				// Fallback if ALSA failed: just sleep
 				sleep(1);
@@ -402,6 +402,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	// Cleanup
 	writelog(3, "Cleaning up resources");
 	if (fds) free(fds);
 	if (mixer_handle) snd_mixer_close(mixer_handle);
