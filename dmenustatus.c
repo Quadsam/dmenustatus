@@ -29,7 +29,6 @@
 Display *display;
 int verbose = 3;
 int test_count = 0;
-bool daemonize = false;
 bool running = true;
 bool daemonize = false;
 snd_mixer_t *mixer_handle = NULL; // Persistent ALSA connection
