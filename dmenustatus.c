@@ -218,7 +218,7 @@ bool get_temp(char *buff, size_t buff_size)
 		const sensors_feature *feature;
 		while ((feature = sensors_get_features(chip, &feature_nr))) {
 			char *label = sensors_get_label(chip, feature);
-			if (label && strstr(label, "CPU Temperature")) {	// Filter for the main temperature
+			if (label && (strstr(label, "CPU Temperature") || strstr(label, "Package"))) {	// Filter for the main temperature
 				const sensors_subfeature *sub = sensors_get_subfeature(chip, feature, SENSORS_SUBFEATURE_TEMP_INPUT);
 				if (sub && sensors_get_value(chip, sub->number, &val) == 0) {
 					found = true;
