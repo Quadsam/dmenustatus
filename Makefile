@@ -1,7 +1,7 @@
 CC       := gcc
-CPPFLAGS += -D_FORTIFY_SOURCE=2 `pkg-config --cflags-only-I x11 fontconfig alsa`
-CFLAGS   += -Wall -Wextra -Werror -O2 -pipe -march=native -fstack-protector-strong -fstack-clash-protection -fcf-protection `pkg-config --cflags-only-other x11 fontconfig alsa`
-LDFLAGS  += `pkg-config --libs x11 fontconfig alsa` -lsensors
+CPPFLAGS := `pkg-config --cflags-only-I x11 fontconfig alsa`
+CFLAGS   := -Wall -Wextra -Werror -O2 -pipe -march=native -fstack-protector-strong -fstack-clash-protection -fcf-protection `pkg-config --cflags-only-other x11 fontconfig alsa`
+LDFLAGS  := `pkg-config --libs x11 fontconfig alsa` -lsensors
 PROGRAM   = dmenustatus
 
 VERSION   = 0.10.5
