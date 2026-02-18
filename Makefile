@@ -1,9 +1,10 @@
 CC       := gcc
-CPPFLAGS += `pkg-config --cflags-only-I x11 fontconfig alsa`
-CFLAGS   += -Wall -Wextra -Werror -O2 `pkg-config --cflags-only-other x11 fontconfig alsa`
+CPPFLAGS += -D_FORTIFY_SOURCE=2 `pkg-config --cflags-only-I x11 fontconfig alsa`
+CFLAGS   += -Wall -Wextra -Werror -O2 -pipe -march=native -fstack-protector-strong -fstack-clash-protection -fcf-protection `pkg-config --cflags-only-other x11 fontconfig alsa`
 LDFLAGS  += `pkg-config --libs x11 fontconfig alsa` -lsensors
 PROGRAM   = dmenustatus
 
+VERSION   = 0.10.4
 
 DESTDIR  ?=
 PREFIX   ?= /usr/local
@@ -11,7 +12,7 @@ BINDIR   ?= $(PREFIX)/bin
 DOCDIR   ?= $(PREFIX)/share/doc/$(PROGRAM)
 MANDIR   ?= $(PREFIX)/share/man
 
-.PHONY: all clean rebuild test dist install uninstall man
+.PHONY: all clean rebuild test dist pkg install uninstall man
 
 all: $(PROGRAM)
 
@@ -27,13 +28,22 @@ test: $(PROGRAM).c
 	@${MAKE} --no-print-directory clean
 	splint $<
 
-dist: clean
-	@echo "  DIST	$(PROGRAM)-dist.tar.gz"
-	@mkdir -p $(PROGRAM)-dist
-	@cp -R Makefile LICENSE README.md dmenustatus.c dmenustatus.1 $(PROGRAM)-dist
-	@tar -cf $(PROGRAM)-dist.tar $(PROGRAM)-dist
-	@gzip -9 $(PROGRAM)-dist.tar
-	@rm -rf $(PROGRAM)-dist
+dist:
+	@$(MAKE) clean
+	@echo "  DIST	$(PROGRAM)-src.tar.gz"
+	@mkdir -p $(PROGRAM)-src
+	@cp -R Makefile LICENSE README.md dmenustatus.c dmenustatus.1 $(PROGRAM)-src
+	@tar -cf $(PROGRAM)-src_v$(VERSION).tar $(PROGRAM)-src
+	@gzip -9 $(PROGRAM)-src_v$(VERSION).tar
+	@rm -rf $(PROGRAM)-src
+
+pkg:
+	@$(MAKE) clean
+	@$(MAKE) all
+	@$(MAKE) DESTDIR='./pkg' install
+	@cd ./pkg && tar cf ../$(PROGRAM)-pkg_v$(VERSION)_x86-64.tar usr
+	@gzip -9 $(PROGRAM)-pkg_v$(VERSION)_x86-64.tar
+	@rm -rf ./pkg
 
 install: all
 	@echo "  I	bin $(PROGRAM) to $(DESTDIR)$(BINDIR)"
@@ -56,6 +66,7 @@ $(PROGRAM): $(PROGRAM).o
 	@echo "  LD	$@"
 	@${CC} -o $@ $^ $(LDFLAGS)
 
-%.o: %.c
+$(PROGRAM).o: $(PROGRAM).c
 	@echo "  CC	$@"
+	sed -i -r 's|(#define VERSION ")[^"]+|\1'$(VERSION)'|gm' $<
 	@${CC} $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
