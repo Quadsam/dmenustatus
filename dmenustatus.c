@@ -46,7 +46,7 @@ void writelog(int level, const char *fmt, ...)
 	if (level > verbose) return;
 
 	time_t now = time(NULL);
-	struct tm *t = localtime(&now);
+	const struct tm *t = localtime(&now);
 	char time_str[32];
 	strftime(time_str, sizeof(time_str), "%x %X", t);
 
@@ -266,9 +266,14 @@ bool get_batt(char *buff, size_t buff_size)
 	fclose(file);
 
 	// Default status
-	char *status = "?";
+	const char *status = "?";
 	file = fopen("/sys/class/power_supply/BAT0/status", "r");
-	if (file && fgets(data, sizeof(data), file)) {
+	if (!file) {
+		writelog(1, "Failed to open battery status");
+		return false;
+	}
+
+	if (fgets(data, sizeof(data), file)) {
 		switch (data[0]) {
 		case 'D': status = "v"; break; // D(ischarging)
 		case 'N': status = "-"; break; // N(ot charging)
@@ -291,8 +296,8 @@ static
 bool get_datetime(char *buff, size_t buff_size)
 {
 	if (!buff || buff_size == 0) return false;
-	time_t now = time(NULL);			// Get current time
-	struct tm *t = localtime(&now);		// Convert to local time structure
+	time_t now = time(NULL);				// Get current time
+	const struct tm *t = localtime(&now);	// Convert to local time structure
 	if (!t) return false;
 	strftime(buff, buff_size, " %I:%M:%S %p | %m/%d/%Y ", t);
 	return true;
