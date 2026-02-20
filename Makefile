@@ -12,7 +12,7 @@ BINDIR   ?= $(PREFIX)/bin
 DOCDIR   ?= $(PREFIX)/share/doc/$(PROGRAM)
 MANDIR   ?= $(PREFIX)/share/man
 
-.PHONY: all clean rebuild test dist pkg install uninstall man
+.PHONY: all clean rebuild check dist pkg install uninstall man
 
 all: $(PROGRAM)
 
@@ -24,9 +24,8 @@ clean:
 
 rebuild: clean all
 
-test: $(PROGRAM).c
-	@${MAKE} --no-print-directory clean
-	splint $<
+check: $(PROGRAM).c
+	@cppcheck --enable=all --suppress=missingIncludeSystem --check-level=exhaustive $<
 
 dist:
 	@$(MAKE) clean
