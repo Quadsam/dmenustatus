@@ -24,7 +24,7 @@
 /* ========================================================================= */
 
 #define BUFFER_SIZE 128
-#define VERSION "0.10.5"
+#define VERSION "0.10.6"
 
 Display *display = NULL;
 int verbose = 3;

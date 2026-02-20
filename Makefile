@@ -4,7 +4,7 @@ CFLAGS   := -Wall -Wextra -Werror -O2 -pipe -march=native -fstack-protector-stro
 LDFLAGS  := `pkg-config --libs x11 fontconfig alsa` -lsensors
 PROGRAM   = dmenustatus
 
-VERSION   = 0.10.5
+VERSION   = 0.10.6
 
 DESTDIR  ?=
 PREFIX   ?= /usr/local
