@@ -26,7 +26,7 @@
 #define BUFFER_SIZE 128
 #define VERSION "0.10.5"
 
-Display *display;
+Display *display = NULL;
 int verbose = 3;
 int test_count = 0;
 bool running = true;
@@ -128,7 +128,6 @@ void parse_args(int argc, char **argv)
 			printf("  -v,      Increase the verbosity.\n");
 			printf("  -V,      Display program version.\n");
 			exit(EXIT_SUCCESS);
-			break;
 		case 'q':
 			if (verbose != 0) verbose--;
 			break;
@@ -143,15 +142,12 @@ void parse_args(int argc, char **argv)
 		case 'V':
 			printf("%s v%s\n", argv[0], VERSION);
 			exit(EXIT_SUCCESS);
-			break;
 		case '?':
 			writelog(0, "Illegal option -- '-%c'", optopt);
 			exit(EXIT_FAILURE);
-			break;
 		case ':':
 			writelog(0, "Missing argument for -- '-%c'", optopt);
 			exit(EXIT_FAILURE);
-			break;
 		}
 	return;
 }
@@ -174,7 +170,6 @@ bool get_vol(char *buff, size_t buff_size)
 	snd_mixer_selem_id_set_index(sid, 0);
 	snd_mixer_selem_id_set_name(sid, "Master");
 	snd_mixer_elem_t *elem = snd_mixer_find_selem(mixer_handle, sid);
-
 	if (!elem) return false;
 
 	// Get Volume Range & Value
@@ -182,10 +177,11 @@ bool get_vol(char *buff, size_t buff_size)
 	snd_mixer_selem_get_playback_volume(elem, SND_MIXER_SCHN_MONO, &vol);
 
 	// Check Mute Status (Switch) -> 0 = Muted, 1 = Unmuted
-	if (snd_mixer_selem_has_playback_switch(elem))
+	if (snd_mixer_selem_has_playback_switch(elem)) {
 		snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &switch_state);
-	else
+	} else {
 		switch_state = 1;
+	}
 
 	// Calculate Percentage
 	// Avoid division by zero if min == max
@@ -251,22 +247,21 @@ bool get_batt(char *buff, size_t buff_size)
 	if (stat("/sys/class/power_supply/BAT0/present", &s) == -1)
 		return false; // No battery installed
 
-
 	FILE *file = fopen("/sys/class/power_supply/BAT0/capacity", "r");
 	if (!file) {
 		writelog(1, "/sys/class/power_supply/BAT0/capacity is missing!");
 		return false;
 	}
 
-	char data[16];
+	// Read capacity
+	char data[16] = "\0";
 	int level = 0;
 	if (fgets(data, sizeof(data), file))
 		level = atoi(data);
-
 	fclose(file);
 
 	// Default status
-	const char *status = "?";
+	char status = '?';
 	file = fopen("/sys/class/power_supply/BAT0/status", "r");
 	if (!file) {
 		writelog(1, "Failed to open battery status");
@@ -275,10 +270,10 @@ bool get_batt(char *buff, size_t buff_size)
 
 	if (fgets(data, sizeof(data), file)) {
 		switch (data[0]) {
-		case 'D': status = "v"; break; // D(ischarging)
-		case 'N': status = "-"; break; // N(ot charging)
-		case 'F': status = " "; break; // F(ull)
-		case 'C': status = "^"; break; // C(harging)
+		case 'D': status = 'v'; break; // D(ischarging)
+		case 'N': status = '-'; break; // N(ot charging)
+		case 'F': status = ' '; break; // F(ull)
+		case 'C': status = '^'; break; // C(harging)
 		}
 	}
 	fclose(file);
@@ -286,7 +281,7 @@ bool get_batt(char *buff, size_t buff_size)
 	if (buff != NULL && buff_size > 0) {
 		size_t len = strlen(buff);
 		if (len < buff_size)
-			snprintf(buff + len, buff_size - len, "| %d%%%s ", level, status);
+			snprintf(buff + len, buff_size - len, "| %d%%%c ", level, status);
 	}
 
 	return true;
@@ -302,8 +297,6 @@ bool get_datetime(char *buff, size_t buff_size)
 	strftime(buff, buff_size, " %I:%M:%S %p | %m/%d/%Y ", t);
 	return true;
 }
-
-
 
 /* ========================================================================= */
 /* MAIN ENTRY POINT															 */
