@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <stdbool.h>
 #include <string.h>
 #include <signal.h>
 #include <time.h>
@@ -23,15 +22,16 @@
 /* GLOBALS																	 */
 /* ========================================================================= */
 
-#define BUFFER_SIZE 128
-#define VERSION "0.10.6"
+constexpr int BUFFER_SIZE = 128;
 
-Display *display = NULL;
+#define VERSION "0.11.0"
+
+Display *display = nullptr;
 int verbose = 3;
 int test_count = 0;
 bool running = true;
 bool daemonize = false;
-snd_mixer_t *mixer_handle = NULL; // Persistent ALSA connection
+snd_mixer_t *mixer_handle = nullptr; // Persistent ALSA connection
 
 /* ========================================================================= */
 /* HELPER FUNCTIONS															 */
@@ -40,14 +40,15 @@ snd_mixer_t *mixer_handle = NULL; // Persistent ALSA connection
 // Logging function
 //   level    = 0-5 (FATAL, ERROR, WARN, INFO, DEBUG, LOG)
 //   fmt, ... = format string (like printf)
-static
-void writelog(int level, const char *fmt, ...)
+static void writelog(int level, const char *fmt, ...)
 {
-	if (level > verbose) return;
+	if (level > verbose)
+		return;
 
-	time_t now = time(NULL);
-	const struct tm *t = localtime(&now);
+	// Get the current date and time for the log
 	char time_str[32];
+	const time_t now = time(nullptr);
+	const struct tm *t = localtime(&now);
 	strftime(time_str, sizeof(time_str), "%x %X", t);
 
 	const char *prefix;
@@ -57,13 +58,13 @@ void writelog(int level, const char *fmt, ...)
 		case 2: prefix = "WARN "; break;
 		case 3: prefix = "INFO "; break;
 		case 4: prefix = "DEBUG"; break;
-		default: prefix = "LOG  "; break;
+		default:prefix = "LOG  "; break;
 	}
 
 	fprintf(stderr, "[ %s ] %s: ", time_str, prefix);
 
 	va_list args;
-	va_start(args, fmt);
+	va_start(args);
 	vfprintf(stderr, fmt, args);
 	va_end(args);
 
@@ -71,8 +72,7 @@ void writelog(int level, const char *fmt, ...)
 }
 
 // Get signal name from signal number
-static
-const char *getsig(int sig)
+static const char *getsig(int sig)
 {
 	switch (sig) {
 		case 1:  return "SIGHUP";
@@ -84,8 +84,7 @@ const char *getsig(int sig)
 }
 
 // Cleanup when we are told to quit
-static
-void cleanup(int sig)
+static void cleanup(int sig)
 {
 	writelog(0, "Caught signal '%s'", getsig(sig));
 	running = false;
@@ -96,58 +95,69 @@ void cleanup(int sig)
 /* ========================================================================= */
 
 // Open a handle to ALSA
-static
-void init_mixer()
+static void init_mixer()
 {
 	// Open the mixer once and keep it open
-	if (snd_mixer_open(&mixer_handle, 0) < 0) { writelog(1, "Failed to open ALSA mixer"); return; }
-	if (snd_mixer_attach(mixer_handle, "default") < 0) { writelog(1, "Failed to attach default card"); return; }
-	if (snd_mixer_selem_register(mixer_handle, NULL, NULL) < 0) { writelog(1, "Failed to register mixer elements"); return; }
-	if (snd_mixer_load(mixer_handle) < 0) { writelog(1, "Failed to load mixer elements"); return; }
+	if (snd_mixer_open(&mixer_handle, 0) < 0) {
+		writelog(1, "Failed to open ALSA mixer");
+		return;
+	}
+	if (snd_mixer_attach(mixer_handle, "default") < 0) {
+		writelog(1, "Failed to attach default card");
+		return;
+	}
+	if (snd_mixer_selem_register(mixer_handle, nullptr, nullptr) < 0) {
+		writelog(1, "Failed to register mixer elements");
+		return;
+	}
+	if (snd_mixer_load(mixer_handle) < 0) {
+		writelog(1, "Failed to load mixer elements");
+		return;
+	}
 	writelog(3, "ALSA mixer initialized");
 }
 
 // Parse command line arguments
-static
-void parse_args(int argc, char **argv)
+static void parse_args(int argc, char **argv)
 {
 	int c;
 	while ((c = getopt(argc, argv, ":dhqt:vV")) != -1)
-		switch (c)
-		{
-		case 'd':
-			daemonize = true;
-			break;
-		case 'h':
-			printf("Usage %s [OPTION]\n\n", argv[0]);
-			printf("Options:\n");
-			printf("  -d,      Run as a daemon.\n");
-			printf("  -h,      Display this help.\n");
-			printf("  -q,      Decrease verbosity.\n");
-			printf("  -t <n>,  Run main loop 'n' times.\n");
-			printf("  -v,      Increase the verbosity.\n");
-			printf("  -V,      Display program version.\n");
-			exit(EXIT_SUCCESS);
-		case 'q':
-			if (verbose != 0) verbose--;
-			break;
-		case 't':
-			test_count = atoi(optarg);
-			if (test_count <= 0) test_count = 1;
-			break;
-		case 'v':
-			verbose++;
-			writelog(3, "Increasing verbosity to: %d", verbose);
-			break;
-		case 'V':
-			printf("%s v%s\n", argv[0], VERSION);
-			exit(EXIT_SUCCESS);
-		case '?':
-			writelog(0, "Illegal option -- '-%c'", optopt);
-			exit(EXIT_FAILURE);
-		case ':':
-			writelog(0, "Missing argument for -- '-%c'", optopt);
-			exit(EXIT_FAILURE);
+		switch (c) {
+			case 'd':
+				daemonize = true;
+				break;
+			case 'h':
+				printf("Usage %s [OPTION]\n\n", argv[0]);
+				printf("Options:\n");
+				printf("  -d,      Run as a daemon.\n");
+				printf("  -h,      Display this help.\n");
+				printf("  -q,      Decrease verbosity.\n");
+				printf("  -t <n>,  Run main loop 'n' times.\n");
+				printf("  -v,      Increase the verbosity.\n");
+				printf("  -V,      Display program version.\n");
+				exit(EXIT_SUCCESS);
+			case 'q':
+				if (verbose != 0)
+					verbose--;
+				break;
+			case 't':
+				test_count = atoi(optarg);
+				if (test_count <= 0)
+					test_count = 1;
+				break;
+			case 'v':
+				verbose++;
+				writelog(3, "Increasing verbosity to: %d", verbose);
+				break;
+			case 'V':
+				printf("%s v%s\n", argv[0], VERSION);
+				exit(EXIT_SUCCESS);
+			case '?':
+				writelog(0, "Illegal option -- '-%c'", optopt);
+				exit(EXIT_FAILURE);
+			case ':':
+				writelog(0, "Missing argument for -- '-%c'", optopt);
+				exit(EXIT_FAILURE);
 		}
 	return;
 }
@@ -156,10 +166,10 @@ void parse_args(int argc, char **argv)
 /* MODULES																	 */
 /* ========================================================================= */
 
-static
-bool get_vol(char *buff, size_t buff_size)
+static bool get_vol(char *buff, size_t buff_size)
 {
-	if (!mixer_handle) return false;
+	if (!mixer_handle)
+		return false;
 
 	long min, max, vol;
 	int switch_state;
@@ -170,7 +180,8 @@ bool get_vol(char *buff, size_t buff_size)
 	snd_mixer_selem_id_set_index(sid, 0);
 	snd_mixer_selem_id_set_name(sid, "Master");
 	snd_mixer_elem_t *elem = snd_mixer_find_selem(mixer_handle, sid);
-	if (!elem) return false;
+	if (!elem)
+		return false;
 
 	// Get Volume Range & Value
 	snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
@@ -200,8 +211,7 @@ bool get_vol(char *buff, size_t buff_size)
 	return true;
 }
 
-static
-bool get_temp(char *buff, size_t buff_size)
+static bool get_temp(char *buff, size_t buff_size)
 {
 	const sensors_chip_name *chip;
 	int chip_nr = 0;
@@ -209,7 +219,7 @@ bool get_temp(char *buff, size_t buff_size)
 	bool found = false;
 
 	// Iterate through chips to find the CPU temperature
-	while ((chip = sensors_get_detected_chips(NULL, &chip_nr))) {
+	while ((chip = sensors_get_detected_chips(nullptr, &chip_nr))) {
 		int feature_nr = 0;
 		const sensors_feature *feature;
 		while ((feature = sensors_get_features(chip, &feature_nr))) {
@@ -232,7 +242,7 @@ bool get_temp(char *buff, size_t buff_size)
 		return false;
 	}
 
-	if (buff != NULL && buff_size > 0) {
+	if (buff != nullptr && buff_size > 0) {
 		size_t len = strlen(buff);
 		if (len + 1 < buff_size)
 			snprintf(buff + len, buff_size - len, "| %.0f°C ", val);
@@ -240,8 +250,7 @@ bool get_temp(char *buff, size_t buff_size)
 	return true;
 }
 
-static
-bool get_batt(char *buff, size_t buff_size)
+static bool get_batt(char *buff, size_t buff_size)
 {
 	struct stat s;
 	if (stat("/sys/class/power_supply/BAT0/present", &s) == -1)
@@ -278,7 +287,7 @@ bool get_batt(char *buff, size_t buff_size)
 	}
 	fclose(file);
 
-	if (buff != NULL && buff_size > 0) {
+	if (buff != nullptr && buff_size > 0) {
 		size_t len = strlen(buff);
 		if (len < buff_size)
 			snprintf(buff + len, buff_size - len, "| %d%%%c ", level, status);
@@ -287,11 +296,10 @@ bool get_batt(char *buff, size_t buff_size)
 	return true;
 }
 
-static
-bool get_datetime(char *buff, size_t buff_size)
+static bool get_datetime(char *buff, size_t buff_size)
 {
 	if (!buff || buff_size == 0) return false;
-	time_t now = time(NULL);				// Get current time
+	time_t now = time(nullptr);				// Get current time
 	const struct tm *t = localtime(&now);	// Convert to local time structure
 	if (!t) return false;
 	strftime(buff, buff_size, " %I:%M:%S %p | %m/%d/%Y ", t);
@@ -339,21 +347,21 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (sensors_init(NULL) != 0)
+	if (sensors_init(nullptr) != 0)
 		writelog(1, "Failed to initialize libsensors");
 
-	bool enable_temp = get_temp(NULL, 0);
-	bool enable_batt = get_batt(NULL, 0);
-	bool enable_vol  = get_vol(NULL, 0);
+	bool enable_temp = get_temp(nullptr, 0);
+	bool enable_batt = get_batt(nullptr, 0);
+	bool enable_vol  = get_vol(nullptr, 0);
 
 	/* POLL SETUP */
 	// Calculate how many file descriptors ALSA needs
 	int alsa_count = 0;
-	struct pollfd *fds = NULL;
+	struct pollfd *fds = nullptr;
 	if (mixer_handle) {
 		alsa_count = snd_mixer_poll_descriptors_count(mixer_handle);
 		if (alsa_count > 0) {
-			fds = calloc (alsa_count, sizeof(struct pollfd));
+			fds = calloc(alsa_count, sizeof(struct pollfd));
 			snd_mixer_poll_descriptors(mixer_handle, fds, alsa_count);
 		}
 	}
@@ -374,9 +382,12 @@ int main(int argc, char **argv)
 		}
 
 		// Concatenate the CPU temp (00°C), battery level (00%), and volume level (VOL 00%) to the buffer
-		if (enable_temp) get_temp(buffer, BUFFER_SIZE);
-		if (enable_batt) get_batt(buffer, BUFFER_SIZE);
-		if (enable_vol)  get_vol(buffer, BUFFER_SIZE);
+		if (enable_temp)
+			get_temp(buffer, BUFFER_SIZE);
+		if (enable_batt)
+			get_batt(buffer, BUFFER_SIZE);
+		if (enable_vol)
+			get_vol(buffer, BUFFER_SIZE);
 
 		// Write buffer to X display (and DEBUG log)
 		XStoreName(display, window, buffer);
@@ -401,8 +412,10 @@ int main(int argc, char **argv)
 
 	// Cleanup
 	writelog(3, "Cleaning up resources");
-	if (fds) free(fds);
-	if (mixer_handle) snd_mixer_close(mixer_handle);
+	if (fds)
+		free(fds);
+	if (mixer_handle)
+		snd_mixer_close(mixer_handle);
 	free(buffer);
 	XCloseDisplay(display);
 	sensors_cleanup();
