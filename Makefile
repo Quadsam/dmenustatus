@@ -1,10 +1,18 @@
 CC       := gcc
-CPPFLAGS := `pkg-config --cflags-only-I x11 fontconfig alsa`
-CFLAGS   := -Wall -Wextra -Werror -O2 -pipe -march=native -fstack-protector-strong -fstack-clash-protection -fcf-protection `pkg-config --cflags-only-other x11 fontconfig alsa`
-LDFLAGS  := `pkg-config --libs x11 fontconfig alsa` -lsensors
-PROGRAM   = dmenustatus
+PROGRAM  := dmenustatus
+VERSION  := 0.11.0
 
-VERSION   = 0.10.6
+CPPFLAGS += `pkg-config --cflags-only-I x11 alsa`
+CFLAGS   += -std=c23 -Wall -Wextra `pkg-config --cflags-only-other x11 alsa`
+LDFLAGS  += `pkg-config --libs x11 alsa` -lsensors
+
+MODE     ?= debug
+ifeq ($(MODE), release)
+	# Release mode
+	CFLAGS += -Werror -O2
+else
+	CFLAGS += -O0 -ggdb
+endif
 
 DESTDIR  ?=
 PREFIX   ?= /usr/local
@@ -12,9 +20,12 @@ BINDIR   ?= $(PREFIX)/bin
 DOCDIR   ?= $(PREFIX)/share/doc/$(PROGRAM)
 MANDIR   ?= $(PREFIX)/share/man
 
-.PHONY: all clean rebuild check dist pkg install uninstall man
+.PHONY: all info clean rebuild check dist pkg install uninstall man
 
-all: $(PROGRAM)
+all: info $(PROGRAM)
+
+info:
+	@echo Building in $(MODE) mode
 
 clean:
 	@echo "  RM	*.o"
@@ -67,5 +78,5 @@ $(PROGRAM): $(PROGRAM).o
 
 $(PROGRAM).o: $(PROGRAM).c
 	@echo "  CC	$@"
-	sed -i -r 's|(#define VERSION ")[^"]+|\1'$(VERSION)'|gm' $<
+	@sed -i -r 's|(#define VERSION ")[^"]+|\1'$(VERSION)'|gm' $<
 	@${CC} $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
